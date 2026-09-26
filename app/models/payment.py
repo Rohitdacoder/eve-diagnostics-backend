@@ -40,6 +40,8 @@ class Payment(TimestampMixin, Base):
     )
     # id the (mock) provider gives us, used to match webhooks to payments
     provider_payment_id: Mapped[str] = mapped_column(String(64), unique=True)
+    # optional key sent by the client so a retried request doesn't pay twice
+    idempotency_key: Mapped[str | None] = mapped_column(String(64), unique=True)
 
     booking: Mapped["Booking"] = relationship(back_populates="payments")  # noqa: F821
 
@@ -56,3 +58,5 @@ class WebhookEvent(Base):
         DateTime(timezone=True), server_default=text("now()")
     )
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # what we did with it: processed / ignored, with a short reason
+    result: Mapped[str | None] = mapped_column(String(255))
