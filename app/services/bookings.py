@@ -101,6 +101,11 @@ def list_bookings(
 
 def cancel_booking(db: Session, user: User, booking_id: int) -> Booking:
     booking = get_booking(db, user, booking_id, for_update=True)
+    # imported here to avoid a circular import (payments uses this module)
+    from app.services.payments import has_pending_payment
+
+    if has_pending_payment(db, booking.id):
+        raise ConflictError("A payment for this booking is in progress, try again shortly")
     change_status(booking, BookingStatus.CANCELLED)
     db.commit()
     return get_booking(db, user, booking_id)
