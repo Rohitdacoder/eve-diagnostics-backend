@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Numeric,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -35,6 +36,16 @@ class Booking(TimestampMixin, Base):
         ),
         CheckConstraint("amount > 0", name="amount_positive"),
         Index("ix_bookings_user_status", "user_id", "status"),
+        # stops the same booking being made twice (double click, client retry)
+        Index(
+            "uq_bookings_active_slot",
+            "user_id",
+            "centre_id",
+            "test_id",
+            "appointment_at",
+            unique=True,
+            postgresql_where=text("status IN ('PENDING', 'CONFIRMED')"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
