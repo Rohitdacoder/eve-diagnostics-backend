@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import update
@@ -73,8 +73,8 @@ def test_can_rebook_after_cancelling(client, user, offering):
 @pytest.mark.parametrize(
     "when,code",
     [
-        ((datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(), 400),
-        ((datetime.now(timezone.utc) + timedelta(days=120)).isoformat(), 400),
+        ((datetime.now(UTC) - timedelta(hours=1)).isoformat(), 400),
+        ((datetime.now(UTC) + timedelta(days=120)).isoformat(), 400),
         ("2026-10-01T10:00:00", 422),  # no timezone
         ("tomorrow", 422),
     ],
@@ -96,7 +96,9 @@ def test_cannot_book_test_not_offered_or_inactive(client, user, admin, offering)
     assert client.post("/bookings/", json=body, headers=auth(user)).status_code == 404
 
     client.patch(
-        f"/centres/{offering.centre_id}/tests/{offering.test_id}", json={"is_active": False}, headers=auth(admin)
+        f"/centres/{offering.centre_id}/tests/{offering.test_id}",
+        json={"is_active": False},
+        headers=auth(admin),
     )
     body = {"centre_id": offering.centre_id, "test_id": offering.test_id, "appointment_at": future()}
     assert client.post("/bookings/", json=body, headers=auth(user)).status_code == 404

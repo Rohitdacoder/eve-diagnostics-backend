@@ -4,6 +4,7 @@ Every key includes a version number. Any admin change bumps the version,
 so all old entries are skipped at once instead of deleting keys one by one.
 Old entries just expire on their own.
 """
+
 from app.config import settings
 from app.core.store import store
 

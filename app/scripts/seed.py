@@ -1,7 +1,8 @@
 """Load some sample centres and tests. Safe to run more than once.
 
-    python -m app.scripts.seed
+python -m app.scripts.seed
 """
+
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -20,10 +21,22 @@ TESTS = {
 }
 
 CENTRES = [
-    ("City Diagnostics", "Delhi", {"Complete Blood Count (CBC)": "350", "Lipid Profile": "600", "HbA1c": "450", "Chest X-Ray": "500"}),
-    ("HealthFirst Labs", "Mumbai", {"Complete Blood Count (CBC)": "400", "Thyroid Profile (T3, T4, TSH)": "550", "Vitamin D": "1200"}),
+    (
+        "City Diagnostics",
+        "Delhi",
+        {"Complete Blood Count (CBC)": "350", "Lipid Profile": "600", "HbA1c": "450", "Chest X-Ray": "500"},
+    ),
+    (
+        "HealthFirst Labs",
+        "Mumbai",
+        {"Complete Blood Count (CBC)": "400", "Thyroid Profile (T3, T4, TSH)": "550", "Vitamin D": "1200"},
+    ),
     ("CarePoint Imaging", "Bengaluru", {"Chest X-Ray": "650", "MRI Brain": "6500"}),
-    ("City Diagnostics", "Pune", {"Complete Blood Count (CBC)": "300", "Lipid Profile": "550", "Vitamin D": "1100"}),
+    (
+        "City Diagnostics",
+        "Pune",
+        {"Complete Blood Count (CBC)": "300", "Lipid Profile": "550", "Vitamin D": "1100"},
+    ),
 ]
 
 

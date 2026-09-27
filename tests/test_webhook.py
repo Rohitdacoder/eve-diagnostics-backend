@@ -67,7 +67,10 @@ def test_late_failure_does_not_undo_success(client, user, pending, db):
 def test_new_event_with_same_status_is_ignored(client, pending):
     _, pid = pending
     send_webhook(client, pid, "SUCCESS", event_id="evt_1")
-    assert send_webhook(client, pid, "SUCCESS", event_id="evt_2").json()["result"] == "ignored: payment already SUCCESS"
+    assert (
+        send_webhook(client, pid, "SUCCESS", event_id="evt_2").json()["result"]
+        == "ignored: payment already SUCCESS"
+    )
 
 
 def test_unknown_payment(client, db):

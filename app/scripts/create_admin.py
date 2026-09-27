@@ -1,7 +1,8 @@
 """Create an admin user, or make an existing user admin.
 
-    python -m app.scripts.create_admin admin@example.com "Admin" 'password123'
+python -m app.scripts.create_admin admin@example.com "Admin" 'password123'
 """
+
 import sys
 
 from sqlalchemy import select

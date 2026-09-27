@@ -32,7 +32,9 @@ def test_payment_failure_then_retry(client, user, make_booking, db):
     assert pay(client, user, b["id"], "failure").json()["booking_status"] == "FAILED"
     assert pay(client, user, b["id"], "success").json()["booking_status"] == "CONFIRMED"
 
-    statuses = db.scalars(select(Payment.status).where(Payment.booking_id == b["id"]).order_by(Payment.id)).all()
+    statuses = db.scalars(
+        select(Payment.status).where(Payment.booking_id == b["id"]).order_by(Payment.id)
+    ).all()
     assert [s.value for s in statuses] == ["FAILED", "FAILED", "SUCCESS"]
 
 
@@ -52,7 +54,11 @@ def test_cannot_pay_for_cancelled_booking(client, user, make_booking):
 
 def test_cannot_pay_for_past_appointment(client, user, make_booking, db):
     b = make_booking(user)
-    db.execute(update(Booking).where(Booking.id == b["id"]).values(appointment_at=func.now() - func.make_interval(0, 0, 0, 0, 1)))
+    db.execute(
+        update(Booking)
+        .where(Booking.id == b["id"])
+        .values(appointment_at=func.now() - func.make_interval(0, 0, 0, 0, 1))
+    )
     db.commit()
     assert pay(client, user, b["id"]).status_code == 400
 

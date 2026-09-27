@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import select, update
@@ -41,7 +41,7 @@ def make_due(db, event_id):
     db.execute(
         update(WebhookEvent)
         .where(WebhookEvent.event_id == event_id)
-        .values(next_retry_at=datetime.now(timezone.utc) - timedelta(seconds=1))
+        .values(next_retry_at=datetime.now(UTC) - timedelta(seconds=1))
     )
     db.commit()
 
@@ -61,7 +61,7 @@ def test_failed_processing_is_saved_and_queued(client, db, pending, broken_proce
     assert event.processed_at is None
     assert event.attempts == 1
     assert event.last_error == "RuntimeError: database hiccup"
-    assert event.next_retry_at > datetime.now(timezone.utc)
+    assert event.next_retry_at > datetime.now(UTC)
     # nothing half applied
     assert booking_status(db, booking_id) == "PENDING"
 
@@ -102,7 +102,7 @@ def test_backoff_grows_between_attempts(client, db, pending, broken_processing):
     gaps = []
     for _ in range(2):
         make_due(db, "evt_1")
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         retry_pending_events(db)
         gaps.append((get_event(db, "evt_1").next_retry_at - before).total_seconds())
     assert gaps[0] == pytest.approx(60, abs=2)
@@ -140,9 +140,7 @@ def test_retry_after_payment_was_settled_another_way(client, user, db, pending, 
 
 def _set_appointment(db, booking_id, delta):
     db.execute(
-        update(Booking)
-        .where(Booking.id == booking_id)
-        .values(appointment_at=datetime.now(timezone.utc) + delta)
+        update(Booking).where(Booking.id == booking_id).values(appointment_at=datetime.now(UTC) + delta)
     )
     db.commit()
 

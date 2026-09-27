@@ -1,7 +1,8 @@
 """Celery worker and scheduled jobs.
 
-    celery -A app.worker worker --beat --loglevel=info
+celery -A app.worker worker --beat --loglevel=info
 """
+
 import logging
 
 from celery import Celery

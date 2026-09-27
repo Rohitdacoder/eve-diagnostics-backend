@@ -39,9 +39,13 @@ def test_login_rate_limit(client, user):
 
 def test_signup_rate_limit(client):
     for i in range(5):
-        r = client.post("/auth/signup", json={"email": f"u{i}@example.com", "full_name": "U", "password": "secret123"})
+        r = client.post(
+            "/auth/signup", json={"email": f"u{i}@example.com", "full_name": "U", "password": "secret123"}
+        )
         assert r.status_code == 201
-    r = client.post("/auth/signup", json={"email": "u9@example.com", "full_name": "U", "password": "secret123"})
+    r = client.post(
+        "/auth/signup", json={"email": "u9@example.com", "full_name": "U", "password": "secret123"}
+    )
     assert r.status_code == 429
 
 

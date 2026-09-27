@@ -4,6 +4,7 @@ Uses Redis when REDIS_URL is set, otherwise an in-memory dict (fine for
 local dev and tests, but not shared between workers). If Redis goes down
 the calls log a warning and behave as "no data", so the API keeps working.
 """
+
 import logging
 import threading
 import time

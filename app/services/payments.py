@@ -2,7 +2,7 @@ import hashlib
 import hmac
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -19,11 +19,14 @@ PAYABLE = {BookingStatus.PENDING, BookingStatus.FAILED}
 
 
 def has_pending_payment(db: Session, booking_id: int) -> bool:
-    return db.scalar(
-        select(Payment.id).where(
-            Payment.booking_id == booking_id, Payment.status == PaymentStatus.PENDING
+    return (
+        db.scalar(
+            select(Payment.id).where(
+                Payment.booking_id == booking_id, Payment.status == PaymentStatus.PENDING
+            )
         )
-    ) is not None
+        is not None
+    )
 
 
 def _apply_result(payment: Payment, booking: Booking, result: PaymentStatus) -> None:
@@ -59,7 +62,7 @@ def create_payment(
         raise ConflictError("Booking is already paid")
     if booking.status not in PAYABLE:
         raise ConflictError(f"Cannot pay for a {booking.status.value} booking")
-    if booking.appointment_at <= datetime.now(timezone.utc):
+    if booking.appointment_at <= datetime.now(UTC):
         raise BadRequestError("Appointment time has already passed")
     if has_pending_payment(db, booking.id):
         raise ConflictError("A payment for this booking is already in progress")
@@ -85,6 +88,7 @@ def create_payment(
 
 
 # ---------- webhook ----------
+
 
 def sign(body: bytes) -> str:
     return hmac.new(settings.webhook_secret.encode(), body, hashlib.sha256).hexdigest()
@@ -117,7 +121,7 @@ def record_event(
             status=status.value,
             payload=payload,
             # if the inline processing below crashes, the retry job picks it up after this
-            next_retry_at=datetime.now(timezone.utc) + _retry_delay(1),
+            next_retry_at=datetime.now(UTC) + _retry_delay(1),
         )
         .on_conflict_do_nothing(index_elements=["event_id"])
         .returning(WebhookEvent.id)
@@ -151,10 +155,16 @@ def process_event(db: Session, event_pk: int) -> dict:
     else:
         _apply_result(payment, booking, status)
         event.result = "processed"
-        log.info("webhook %s: payment %s -> %s, booking %s -> %s",
-                 event.event_id, payment.id, payment.status.value, booking.id, booking.status.value)
+        log.info(
+            "webhook %s: payment %s -> %s, booking %s -> %s",
+            event.event_id,
+            payment.id,
+            payment.status.value,
+            booking.id,
+            booking.status.value,
+        )
 
-    event.processed_at = datetime.now(timezone.utc)
+    event.processed_at = datetime.now(UTC)
     event.next_retry_at = None
     db.commit()
     return {"result": event.result, "payment_status": payment.status, "booking_status": booking.status}
@@ -167,14 +177,19 @@ def _mark_failed_attempt(db: Session, event_pk: int, error: Exception) -> None:
     event.last_error = f"{type(error).__name__}: {error}"[:1000]
     if event.attempts >= MAX_ATTEMPTS:
         # give up; kept in the table with the error so someone can look at it
-        event.processed_at = datetime.now(timezone.utc)
+        event.processed_at = datetime.now(UTC)
         event.next_retry_at = None
         event.result = f"failed after {event.attempts} attempts"
         log.error("webhook %s gave up: %s", event.event_id, event.last_error)
     else:
-        event.next_retry_at = datetime.now(timezone.utc) + _retry_delay(event.attempts)
-        log.warning("webhook %s attempt %s failed, retry at %s: %s",
-                    event.event_id, event.attempts, event.next_retry_at, event.last_error)
+        event.next_retry_at = datetime.now(UTC) + _retry_delay(event.attempts)
+        log.warning(
+            "webhook %s attempt %s failed, retry at %s: %s",
+            event.event_id,
+            event.attempts,
+            event.next_retry_at,
+            event.last_error,
+        )
     db.commit()
 
 
@@ -202,7 +217,7 @@ def handle_webhook(
 
 def retry_pending_events(db: Session, batch_size: int = 50) -> int:
     """Called by the background job. Returns how many events were retried."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # SKIP LOCKED: events another worker (or a request) is busy with are skipped, not waited for
     ids = db.scalars(
         select(WebhookEvent.id)

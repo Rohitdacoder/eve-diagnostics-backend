@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -37,7 +37,7 @@ def _load_options():
 def create_booking(
     db: Session, user: User, centre_id: int, test_id: int, appointment_at: datetime
 ) -> Booking:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if appointment_at <= now:
         raise BadRequestError("Appointment time must be in the future")
     if appointment_at > now + timedelta(days=MAX_DAYS_AHEAD):
@@ -60,7 +60,7 @@ def create_booking(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise ConflictError("You already have a booking for this test at this time")
+        raise ConflictError("You already have a booking for this test at this time") from None
     return get_booking(db, user, booking.id)
 
 

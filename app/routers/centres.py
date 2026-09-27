@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session, selectinload
 
 from app.core import cache
 from app.core.deps import require_admin
@@ -39,7 +39,7 @@ def _commit_or_409(db: Session, detail: str):
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from None
     cache.invalidate_catalog()
 
 
@@ -50,7 +50,9 @@ def _cached(name: str, build) -> Response:
     if not hit:
         body = build().model_dump_json()
         cache.set(name, body)
-    return Response(content=body, media_type="application/json", headers={"X-Cache": "HIT" if hit else "MISS"})
+    return Response(
+        content=body, media_type="application/json", headers={"X-Cache": "HIT" if hit else "MISS"}
+    )
 
 
 def _escape_like(value: str) -> str:
@@ -59,6 +61,7 @@ def _escape_like(value: str) -> str:
 
 
 # ---------- tests catalog ----------
+
 
 @router.get("/tests/", response_model=Page[TestOut])
 def list_tests(
@@ -85,6 +88,7 @@ def create_test(data: TestCreate, db: Session = Depends(get_db), _=Depends(requi
 
 
 # ---------- centres ----------
+
 
 @router.get("/centres/", response_model=Page[CentreOut])
 def list_centres(
@@ -156,6 +160,7 @@ def update_centre(
 
 # ---------- tests offered at a centre ----------
 
+
 @router.post(
     "/centres/{centre_id}/tests",
     response_model=OfferingOut,
@@ -185,7 +190,9 @@ def update_offering(
 ):
     offering = db.get(CentreTest, (centre_id, test_id))
     if offering is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="This centre does not offer this test")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="This centre does not offer this test"
+        )
 
     # existing bookings keep their own amount, so changing the price here is safe
     for field, value in data.model_dump(exclude_unset=True, exclude_none=True).items():

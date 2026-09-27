@@ -31,7 +31,7 @@ def signup(data: SignupRequest, db: Session = Depends(get_db)):
     except IntegrityError:
         # unique constraint on email, also covers two signups at the same time
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered") from None
     db.refresh(user)
     return user
 

@@ -35,8 +35,14 @@ def test_location_filter_treats_wildcards_literally(client, admin):
 
 def test_centre_detail_shows_active_tests_only(client, admin, offering, db):
     t2 = client.post("/tests/", json={"name": "MRI"}, headers=auth(admin)).json()
-    client.post(f"/centres/{offering.centre_id}/tests", json={"test_id": t2["id"], "price": "4000"}, headers=auth(admin))
-    client.patch(f"/centres/{offering.centre_id}/tests/{t2['id']}", json={"is_active": False}, headers=auth(admin))
+    client.post(
+        f"/centres/{offering.centre_id}/tests",
+        json={"test_id": t2["id"], "price": "4000"},
+        headers=auth(admin),
+    )
+    client.patch(
+        f"/centres/{offering.centre_id}/tests/{t2['id']}", json={"is_active": False}, headers=auth(admin)
+    )
 
     r = client.get(f"/centres/{offering.centre_id}")
     assert r.status_code == 200
@@ -93,7 +99,12 @@ def test_add_offering(client, admin, offering):
 
     assert client.post(url, json={"test_id": t2["id"], "price": "1"}, headers=auth(admin)).status_code == 409
     assert client.post(url, json={"test_id": 9999, "price": "1"}, headers=auth(admin)).status_code == 404
-    assert client.post("/centres/9999/tests", json={"test_id": t2["id"], "price": "1"}, headers=auth(admin)).status_code == 404
+    assert (
+        client.post(
+            "/centres/9999/tests", json={"test_id": t2["id"], "price": "1"}, headers=auth(admin)
+        ).status_code
+        == 404
+    )
 
 
 def test_price_validation(client, admin, offering):

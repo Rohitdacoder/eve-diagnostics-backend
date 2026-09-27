@@ -29,9 +29,7 @@ class Payment(TimestampMixin, Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    booking_id: Mapped[int] = mapped_column(
-        ForeignKey("bookings.id", ondelete="RESTRICT"), index=True
-    )
+    booking_id: Mapped[int] = mapped_column(ForeignKey("bookings.id", ondelete="RESTRICT"), index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     status: Mapped[PaymentStatus] = mapped_column(
         Enum(PaymentStatus, native_enum=False, length=20, create_constraint=True),
@@ -66,9 +64,7 @@ class WebhookEvent(Base):
     provider_payment_id: Mapped[str] = mapped_column(String(64), index=True)
     status: Mapped[str | None] = mapped_column(String(20))
     payload: Mapped[dict] = mapped_column(JSONB)
-    received_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=text("now()")
-    )
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # what we did with it: processed / ignored / failed, with a short reason
     result: Mapped[str | None] = mapped_column(String(255))

@@ -1,5 +1,6 @@
 """Requests arriving at the same moment. Each thread has its own db session,
 like separate requests would, and a barrier makes them start together."""
+
 import threading
 from collections import Counter
 
@@ -49,7 +50,9 @@ def test_same_webhook_at_the_same_time(client, user, make_booking, db):
     payload = {"event_id": "evt_race", "provider_payment_id": pid, "status": "SUCCESS"}
 
     results = run_together(
-        lambda s, i: payment_service.handle_webhook(s, "evt_race", pid, PaymentStatus.SUCCESS, payload)["result"]
+        lambda s, i: payment_service.handle_webhook(s, "evt_race", pid, PaymentStatus.SUCCESS, payload)[
+            "result"
+        ]
     )
 
     assert Counter(results) == {"processed": 1, "duplicate": N - 1}
@@ -79,7 +82,9 @@ def test_many_payments_for_one_booking_at_the_same_time(client, user, make_booki
     user_id = user.id
 
     results = run_together(
-        lambda s, i: payment_service.create_payment(s, s.get(User, user_id), booking_id, "success")[0].status.value
+        lambda s, i: (
+            payment_service.create_payment(s, s.get(User, user_id), booking_id, "success")[0].status.value
+        )
     )
 
     assert Counter(results) == {"SUCCESS": 1, "ConflictError": N - 1}
@@ -108,7 +113,7 @@ def test_cancel_and_pay_at_the_same_time(client, user, make_booking, db):
     for _ in range(5):
         booking_id = make_booking(user)["id"]
 
-        def go(s, i):
+        def go(s, i, booking_id=booking_id):
             u = s.get(User, user_id)
             if i == 0:
                 return booking_service.cancel_booking(s, u, booking_id).status.value

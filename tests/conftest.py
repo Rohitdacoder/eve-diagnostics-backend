@@ -7,17 +7,17 @@ os.environ["WEBHOOK_SECRET"] = "test-webhook-secret-at-least-32-bytes"
 os.environ["REDIS_URL"] = ""  # in-memory store, see test_store.py for redis itself
 os.environ["SECRET_KEY"] = "test-secret-key-that-is-at-least-32-bytes"
 
-from datetime import datetime, timedelta, timezone  # noqa: E402
-from decimal import Decimal  # noqa: E402
 import json  # noqa: E402
+from datetime import UTC, datetime, timedelta  # noqa: E402
+from decimal import Decimal  # noqa: E402
 
 import psycopg  # noqa: E402
 import pytest  # noqa: E402
-from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import make_url, text  # noqa: E402
 
+from alembic import command  # noqa: E402
 from app.core.security import create_access_token, hash_password  # noqa: E402
 from app.core.store import store  # noqa: E402
 from app.database import Base, SessionLocal, engine  # noqa: E402
@@ -121,7 +121,7 @@ def offering(db):
 
 
 def future(days=3, hour=10) -> str:
-    t = datetime.now(timezone.utc).replace(hour=hour, minute=0, second=0, microsecond=0) + timedelta(days=days)
+    t = datetime.now(UTC).replace(hour=hour, minute=0, second=0, microsecond=0) + timedelta(days=days)
     return t.isoformat()
 
 

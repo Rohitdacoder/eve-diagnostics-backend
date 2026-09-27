@@ -64,7 +64,7 @@ def payment_webhook(
         data = WebhookPayload.model_validate(raw)
     except (ValueError, ValidationError) as e:
         detail = e.errors() if isinstance(e, ValidationError) else "Invalid JSON"
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail) from None
 
     result = service.handle_webhook(
         db, data.event_id, data.provider_payment_id, PaymentStatus(data.status), raw

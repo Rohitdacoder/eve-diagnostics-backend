@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
@@ -67,7 +67,7 @@ def test_login_wrong_password_and_unknown_email_look_the_same(client):
 
 
 def _token(sub, exp_delta, secret=None, alg="HS256"):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {"sub": sub, "iat": now, "exp": now + exp_delta}
     return jwt.encode(payload, secret or settings.secret_key, algorithm=alg)
 
