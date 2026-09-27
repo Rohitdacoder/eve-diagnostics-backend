@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
+from app.core.rate_limit import rate_limit
 from app.core.security import DUMMY_HASH, create_access_token, hash_password, verify_password
 from app.database import get_db
 from app.models import User
@@ -12,7 +13,12 @@ from app.schemas.auth import LoginRequest, SignupRequest, TokenResponse, UserOut
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/signup", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/signup",
+    response_model=UserOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit("signup", limit=5))],
+)
 def signup(data: SignupRequest, db: Session = Depends(get_db)):
     user = User(
         email=data.email,
@@ -30,7 +36,11 @@ def signup(data: SignupRequest, db: Session = Depends(get_db)):
     return user
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    dependencies=[Depends(rate_limit("login", limit=10))],
+)
 def login(data: LoginRequest, db: Session = Depends(get_db)):
     user = db.scalar(select(User).where(User.email == data.email))
     # same error for wrong email and wrong password

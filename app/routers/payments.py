@@ -5,6 +5,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
+from app.core.rate_limit import rate_limit
 from app.database import get_db
 from app.models import PaymentStatus, User
 from app.schemas.payment import PaymentCreate, PaymentOut, WebhookPayload, WebhookResponse
@@ -13,7 +14,12 @@ from app.services import payments as service
 router = APIRouter(prefix="/payments", tags=["payments"])
 
 
-@router.post("/", response_model=PaymentOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=PaymentOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit("payments", limit=20))],
+)
 def create_payment(
     data: PaymentCreate,
     response: Response,

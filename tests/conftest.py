@@ -4,6 +4,7 @@ import os
 os.environ.setdefault("TEST_DATABASE_URL", "postgresql+psycopg://eve:eve@localhost:5432/eve_test")
 os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
 os.environ["WEBHOOK_SECRET"] = "test-webhook-secret-at-least-32-bytes"
+os.environ["REDIS_URL"] = ""  # in-memory store, see test_store.py for redis itself
 os.environ["SECRET_KEY"] = "test-secret-key-that-is-at-least-32-bytes"
 
 from datetime import datetime, timedelta, timezone  # noqa: E402
@@ -18,6 +19,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import make_url, text  # noqa: E402
 
 from app.core.security import create_access_token, hash_password  # noqa: E402
+from app.core.store import store  # noqa: E402
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import CentreTest, DiagnosticCentre, DiagnosticTest, User  # noqa: E402
@@ -49,6 +51,7 @@ def database():
 
 @pytest.fixture(autouse=True)
 def clean_tables():
+    store.clear()  # rate limit counters and cache
     yield
     tables = ", ".join(t.name for t in Base.metadata.sorted_tables)
     with engine.begin() as conn:
