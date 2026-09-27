@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Numeric, String, text
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -47,16 +47,31 @@ class Payment(TimestampMixin, Base):
 
 
 class WebhookEvent(Base):
+    """Every webhook we receive is saved here first, then processed.
+    If processing fails it stays unprocessed and a background job retries it."""
+
     __tablename__ = "webhook_events"
+    __table_args__ = (
+        # the retry job only looks at unprocessed events
+        Index(
+            "ix_webhook_events_unprocessed",
+            "next_retry_at",
+            postgresql_where=text("processed_at IS NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     # unique so the same event can never be processed twice
     event_id: Mapped[str] = mapped_column(String(64), unique=True)
     provider_payment_id: Mapped[str] = mapped_column(String(64), index=True)
+    status: Mapped[str | None] = mapped_column(String(20))
     payload: Mapped[dict] = mapped_column(JSONB)
     received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # what we did with it: processed / ignored, with a short reason
+    # what we did with it: processed / ignored / failed, with a short reason
     result: Mapped[str | None] = mapped_column(String(255))
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_error: Mapped[str | None] = mapped_column(Text)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
