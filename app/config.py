@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     secret_key: str = "change-me"
     access_token_expire_minutes: int = 60
     webhook_secret: str = "change-me-too"
+    log_level: str = "INFO"
+    log_format: str = "json"  # json or text
 
 
 settings = Settings()
