@@ -1,3 +1,11 @@
+x-app-env: &app-env
+  DATABASE_URL: postgresql+psycopg://eve:eve@db:5432/eve
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/1
+  SECRET_KEY: ${SECRET_KEY:-local-dev-secret-key-change-me-in-production}
+  WEBHOOK_SECRET: ${WEBHOOK_SECRET:-local-dev-webhook-secret-change-me-in-prod}
+  LOG_FORMAT: ${LOG_FORMAT:-json}
+
 services:
   db:
     image: postgres:16
@@ -6,7 +14,7 @@ services:
       POSTGRES_PASSWORD: eve
       POSTGRES_DB: eve
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -17,11 +25,35 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       retries: 5
+
+  api:
+    build: .
+    environment:
+      <<: *app-env
+      RUN_MIGRATIONS: "true"
+      SEED_DATA: ${SEED_DATA:-true}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: ["celery", "-A", "app.worker", "worker", "--beat", "--loglevel=info", "-s", "/tmp/celerybeat-schedule"]
+    environment: *app-env
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      disable: true
 
 volumes:
   pgdata:
