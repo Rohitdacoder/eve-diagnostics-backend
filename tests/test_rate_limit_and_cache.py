@@ -1,5 +1,28 @@
+import pytest
+
 from app.config import settings
+from app.core import rate_limit
 from tests.conftest import auth
+
+
+@pytest.fixture(autouse=True)
+def frozen_clock(monkeypatch):
+    # fixed windows reset on the minute; freeze time so a test can't straddle two windows
+    now = {"t": 1_800_000_010}
+    monkeypatch.setattr(rate_limit, "_now", lambda: now["t"])
+    return now
+
+
+def test_limit_resets_in_next_window(client, user, frozen_clock):
+    body = {"email": "rohit@example.com", "password": "wrong1234"}
+    for _ in range(10):
+        client.post("/auth/login", json=body)
+    r = client.post("/auth/login", json=body)
+    assert r.status_code == 429
+    assert r.headers["Retry-After"] == "50"
+
+    frozen_clock["t"] += 50
+    assert client.post("/auth/login", json=body).status_code == 401
 
 
 def test_login_rate_limit(client, user):

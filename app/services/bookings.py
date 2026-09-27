@@ -109,3 +109,26 @@ def cancel_booking(db: Session, user: User, booking_id: int) -> Booking:
     change_status(booking, BookingStatus.CANCELLED)
     db.commit()
     return get_booking(db, user, booking_id)
+
+
+def expire_unpaid_bookings(db: Session) -> int:
+    """Cancels PENDING/FAILED bookings whose appointment time has passed without payment.
+    Bookings with a payment still in progress are left alone."""
+    from app.models import Payment, PaymentStatus
+
+    in_progress = select(Payment.id).where(
+        Payment.booking_id == Booking.id, Payment.status == PaymentStatus.PENDING
+    )
+    stale = db.scalars(
+        select(Booking)
+        .where(
+            Booking.status.in_([BookingStatus.PENDING, BookingStatus.FAILED]),
+            Booking.appointment_at < func.now(),
+            ~in_progress.exists(),
+        )
+        .with_for_update(skip_locked=True)
+    ).all()
+    for booking in stale:
+        change_status(booking, BookingStatus.CANCELLED)
+    db.commit()
+    return len(stale)

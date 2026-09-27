@@ -2,7 +2,7 @@ import hashlib
 import hmac
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -96,49 +96,126 @@ def verify_signature(body: bytes, signature: str | None) -> bool:
     return hmac.compare_digest(sign(body), signature)
 
 
-def handle_webhook(
+MAX_ATTEMPTS = 5
+RETRY_BASE_SECONDS = 30
+
+
+def _retry_delay(attempts: int) -> timedelta:
+    # 30s, 60s, 2m, 4m, ...
+    return timedelta(seconds=RETRY_BASE_SECONDS * 2 ** (attempts - 1))
+
+
+def record_event(
     db: Session, event_id: str, provider_payment_id: str, status: PaymentStatus, payload: dict
-) -> dict:
-    # 1. record the event. if event_id is already there this inserts nothing,
-    #    and a second copy arriving at the same moment waits on the unique index
+) -> int | None:
+    """Saves the event and commits. Returns its id, or None if this event_id was seen before."""
     inserted = db.scalar(
         insert(WebhookEvent)
-        .values(event_id=event_id, provider_payment_id=provider_payment_id, payload=payload)
+        .values(
+            event_id=event_id,
+            provider_payment_id=provider_payment_id,
+            status=status.value,
+            payload=payload,
+            # if the inline processing below crashes, the retry job picks it up after this
+            next_retry_at=datetime.now(timezone.utc) + _retry_delay(1),
+        )
         .on_conflict_do_nothing(index_elements=["event_id"])
         .returning(WebhookEvent.id)
     )
-    if inserted is None:
-        db.rollback()
-        log.info("webhook %s already received, skipping", event_id)
-        return {"result": "duplicate"}
+    db.commit()
+    return inserted
 
-    payment = db.scalar(select(Payment).where(Payment.provider_payment_id == provider_payment_id))
-    if payment is None:
-        # rolled back so the event isn't marked as seen; provider can retry later
-        db.rollback()
-        raise NotFoundError("Unknown payment")
 
-    # 2. lock booking then payment (same order as create_payment, avoids deadlocks)
+def process_event(db: Session, event_pk: int) -> dict:
+    """Applies a saved event to its payment and booking. Safe to call more than once."""
+    # lock the event so the request and the retry job can't process it at the same time
+    event = db.scalar(select(WebhookEvent).where(WebhookEvent.id == event_pk).with_for_update())
+    if event.processed_at is not None:
+        db.rollback()
+        return {"result": event.result}
+
+    payment = db.scalar(select(Payment).where(Payment.provider_payment_id == event.provider_payment_id))
+    # lock booking then payment (same order as create_payment, avoids deadlocks)
     booking = db.scalar(select(Booking).where(Booking.id == payment.booking_id).with_for_update())
     db.refresh(payment, with_for_update=True)
+    status = PaymentStatus(event.status)
 
-    event = db.get(WebhookEvent, inserted)
-    event.processed_at = datetime.now(timezone.utc)
-
-    # 3. only a PENDING payment can change. a different event with the same final
-    #    status is harmless, a conflicting one (SUCCESS after FAILED etc.) is ignored
+    # only a PENDING payment can change. a different event with the same final
+    # status is harmless, a conflicting one (SUCCESS after FAILED etc.) is ignored
     if payment.status != PaymentStatus.PENDING:
         if payment.status == status:
             event.result = "ignored: payment already " + status.value
         else:
             event.result = f"ignored: payment is {payment.status.value}, got {status.value}"
-            log.warning("webhook %s conflicts with payment %s: %s", event_id, payment.id, event.result)
-        db.commit()
-        return {"result": event.result, "payment_status": payment.status, "booking_status": booking.status}
+            log.warning("webhook %s conflicts with payment %s: %s", event.event_id, payment.id, event.result)
+    else:
+        _apply_result(payment, booking, status)
+        event.result = "processed"
+        log.info("webhook %s: payment %s -> %s, booking %s -> %s",
+                 event.event_id, payment.id, payment.status.value, booking.id, booking.status.value)
 
-    _apply_result(payment, booking, status)
-    event.result = "processed"
+    event.processed_at = datetime.now(timezone.utc)
+    event.next_retry_at = None
     db.commit()
-    log.info("webhook %s: payment %s -> %s, booking %s -> %s",
-             event_id, payment.id, payment.status.value, booking.id, booking.status.value)
-    return {"result": "processed", "payment_status": payment.status, "booking_status": booking.status}
+    return {"result": event.result, "payment_status": payment.status, "booking_status": booking.status}
+
+
+def _mark_failed_attempt(db: Session, event_pk: int, error: Exception) -> None:
+    db.rollback()
+    event = db.get(WebhookEvent, event_pk, with_for_update=True)
+    event.attempts += 1
+    event.last_error = f"{type(error).__name__}: {error}"[:1000]
+    if event.attempts >= MAX_ATTEMPTS:
+        # give up; kept in the table with the error so someone can look at it
+        event.processed_at = datetime.now(timezone.utc)
+        event.next_retry_at = None
+        event.result = f"failed after {event.attempts} attempts"
+        log.error("webhook %s gave up: %s", event.event_id, event.last_error)
+    else:
+        event.next_retry_at = datetime.now(timezone.utc) + _retry_delay(event.attempts)
+        log.warning("webhook %s attempt %s failed, retry at %s: %s",
+                    event.event_id, event.attempts, event.next_retry_at, event.last_error)
+    db.commit()
+
+
+def handle_webhook(
+    db: Session, event_id: str, provider_payment_id: str, status: PaymentStatus, payload: dict
+) -> dict:
+    # unknown payment: don't save the event, so the provider's own retry still works
+    # (e.g. webhook arrived before our payment row was committed)
+    known = db.scalar(select(Payment.id).where(Payment.provider_payment_id == provider_payment_id))
+    if known is None:
+        raise NotFoundError("Unknown payment")
+
+    event_pk = record_event(db, event_id, provider_payment_id, status, payload)
+    if event_pk is None:
+        log.info("webhook %s already received, skipping", event_id)
+        return {"result": "duplicate"}
+
+    try:
+        return process_event(db, event_pk)
+    except Exception as e:
+        # event is saved, the retry job will pick it up
+        _mark_failed_attempt(db, event_pk, e)
+        return {"result": "queued for retry"}
+
+
+def retry_pending_events(db: Session, batch_size: int = 50) -> int:
+    """Called by the background job. Returns how many events were retried."""
+    now = datetime.now(timezone.utc)
+    # SKIP LOCKED: events another worker (or a request) is busy with are skipped, not waited for
+    ids = db.scalars(
+        select(WebhookEvent.id)
+        .where(WebhookEvent.processed_at.is_(None), WebhookEvent.next_retry_at <= now)
+        .order_by(WebhookEvent.next_retry_at)
+        .limit(batch_size)
+        .with_for_update(skip_locked=True)
+    ).all()
+    db.rollback()
+
+    for event_pk in ids:
+        try:
+            process_event(db, event_pk)
+        except Exception as e:
+            _mark_failed_attempt(db, event_pk, e)
+    return len(ids)

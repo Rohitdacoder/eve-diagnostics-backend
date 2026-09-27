@@ -49,6 +49,7 @@ async def raw_body(request: Request) -> bytes:
     },
 )
 def payment_webhook(
+    response: Response,
     body: bytes = Depends(raw_body),
     x_signature: str | None = Header(default=None),
     db: Session = Depends(get_db),
@@ -65,6 +66,10 @@ def payment_webhook(
         detail = e.errors() if isinstance(e, ValidationError) else "Invalid JSON"
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
 
-    return service.handle_webhook(
+    result = service.handle_webhook(
         db, data.event_id, data.provider_payment_id, PaymentStatus(data.status), raw
     )
+    if result["result"] == "queued for retry":
+        # we have the event saved, the provider doesn't need to resend it
+        response.status_code = status.HTTP_202_ACCEPTED
+    return result

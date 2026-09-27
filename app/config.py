@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     webhook_secret: str = "change-me-too"
     redis_url: str = ""  # empty = in-memory store
+    celery_broker_url: str = "redis://localhost:6379/1"
     rate_limit_enabled: bool = True
     cache_enabled: bool = True
     cache_ttl_seconds: int = 300

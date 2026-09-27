@@ -6,6 +6,10 @@ from app.config import settings
 from app.core.store import store
 
 
+def _now() -> int:
+    return int(time.time())
+
+
 def rate_limit(name: str, limit: int, window: int = 60):
     """Dependency: at most `limit` requests per `window` seconds per client IP.
 
@@ -16,7 +20,7 @@ def rate_limit(name: str, limit: int, window: int = 60):
         if not settings.rate_limit_enabled:
             return
         ip = request.client.host if request.client else "unknown"
-        now = int(time.time())
+        now = _now()
         window_no = now // window
         count = store.incr(f"rl:{name}:{ip}:{window_no}", ttl=window)
         if count > limit:
