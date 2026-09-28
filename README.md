@@ -1,5 +1,7 @@
 # EVE Diagnostics Backend
 
+[![CI](https://github.com/Rohitdacoder/eve-diagnostics-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/Rohitdacoder/eve-diagnostics-backend/actions/workflows/ci.yml)
+
 Backend for booking diagnostic tests at diagnostic centres, with a simulated payment provider and an idempotent payment webhook.
 
 Built with FastAPI, PostgreSQL, SQLAlchemy 2.0, Alembic, Redis and Celery.
@@ -21,7 +23,7 @@ Built with FastAPI, PostgreSQL, SQLAlchemy 2.0, Alembic, Redis and Celery.
 ### With Docker (recommended)
 
 ```bash
-git clone git@github.com:Rohitdacoder/eve-diagnostics-backend.git
+git clone https://github.com/Rohitdacoder/eve-diagnostics-backend.git
 cd eve-diagnostics-backend
 docker compose up -d --build
 ```
@@ -110,7 +112,7 @@ curl -X POST localhost:8000/auth/signup -H "Content-Type: application/json" \
   -d '{"email":"rohit@example.com","full_name":"Rohit","password":"secret123"}'
 
 TOKEN=$(curl -s -X POST localhost:8000/auth/login -H "Content-Type: application/json" \
-  -d '{"email":"rohit@example.com","password":"secret123"}' | python -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+  -d '{"email":"rohit@example.com","password":"secret123"}' | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
 
 # browse
 curl "localhost:8000/centres/?location=delhi"
